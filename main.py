@@ -29,7 +29,8 @@ tags = {}
 
 #do_ai_fast.set() # for testing
 cheat = False
-cheat = True
+#cheat = True
+quittable = False
 
 WORDS_PATH = '8only.dic'
 SPLIT = 48
@@ -55,7 +56,7 @@ def main(stdscr, *args, **kwargs):
 	global answer, feedback, candidates
 
 	gevent.signal(signal.SIGUSR1, lambda *args: game_close.set()) # For standard/graceful restart
-	signal.signal(signal.SIGINT, signal.SIG_IGN) # Disable SIGINT
+	gevent.signal(signal.SIGINT, lambda *args: None) # Disable SIGINT
 	signal.signal(signal.SIGQUIT, signal.SIG_IGN) # Disable SIGQUIT
 	signal.signal(signal.SIGTSTP, signal.SIG_IGN) # Disable SIGTSTP
 
@@ -236,7 +237,7 @@ def key_handler(stdscr, leftscr):
 					tags[(y, x+i)] = PAIR_TAGGED
 			update_attr(leftscr, HL_LEN, CURSOR_ATTR)
 			leftscr.refresh()
-		elif key == ord('q'):
+		elif quittable and key == ord('q'):
 			sys.exit(0)
 
 def submit(screen, submission):
