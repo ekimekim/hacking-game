@@ -30,7 +30,7 @@ tags = {}
 #do_ai_fast.set() # for testing
 
 WORDS_PATH = '8only.dic'
-SPLIT = 64
+SPLIT = 48
 HL_LEN = 8
 AI_CHAT_HEIGHT = 16
 AI_DELAY = 0.04
