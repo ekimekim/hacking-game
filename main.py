@@ -31,6 +31,7 @@ tags = {}
 
 WORDS_PATH = '8only.dic'
 SPLIT = 48
+VERTSPLIT = 16
 HL_LEN = 8
 AI_CHAT_HEIGHT = 16
 AI_DELAY = 0.04
@@ -73,16 +74,12 @@ def main(stdscr, *args, **kwargs):
 	curses.init_pair(PAIR_TAGGED, curses.COLOR_YELLOW, curses.COLOR_BLACK)
 
 	rightscr = stdscr.subwin(0, SPLIT)
-	leftscr = stdscr.subwin(MAXY, SPLIT, 0, 0)
+	leftscr = stdscr.subwin(VERTSPLIT, SPLIT, 0, 0)
 
 	logging.info("Right screen from %s, size %s", rightscr.getbegyx(), rightscr.getmaxyx())
 	logging.info("Left screen from %s, size %s", leftscr.getbegyx(), leftscr.getmaxyx())
 
-	y, x = rightscr.getbegyx()
-	h, w = rightscr.getmaxyx()
-	y += AI_CHAT_HEIGHT + 2
-	h -= AI_CHAT_HEIGHT + 2
-	feedback = SlowtypeWindow((y+1,x+1), (h-3, w-2))
+	feedback = SlowtypeWindow((VERTSPLIT, 1), (MAXY - VERTSPLIT - 1, SPLIT - 1))
 
 	answer = random.choice(get_words(WORDS_PATH))
 	candidates = get_closest(answer, WORDS_PATH, NUM_CANDIDATES - 1) + [answer]
