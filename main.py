@@ -226,7 +226,7 @@ def key_handler(stdscr, leftscr):
 			else:
 				for i in range(HL_LEN):
 					tags[(y, x+i)] = PAIR_TAGGED
-			update_attr(leftscr, HL_LEN, curses.color_pair(1) | curses.A_BOLD)
+			update_attr(leftscr, HL_LEN, curses.A_BOLD)
 			leftscr.refresh()
 		elif key == ord('q'):
 			sys.exit(0)
