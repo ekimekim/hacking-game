@@ -10,16 +10,39 @@ class SlowtypeWindow(object):
 		self.queue = Queue()
 		self.g_writer = spawn(self.writer)
 		self.delay = delay
+		_, self.width = size
 
 	def writer(self):
+		line_pos = 0
 		for x in self.queue:
 			if type(x) == Event:
 				x.set()
 				continue
 			s, attr = x
-			for c in s:
-				self.scrollpad.addstr(c, attr)
-				sleep(self.delay)
+			lines = s.split('\n')
+			for l in range(len(lines)):
+				line = lines[l]
+				words = line.split(' ')
+				for w in range(len(words)):
+					word = words[w]
+					line_pos += len(word)
+					if line_pos > self.width:
+						self.scrollpad.addstr('\n', attr)
+						line_pos = len(word)
+					for c in word:
+						self.scrollpad.addstr(c, attr)
+						sleep(self.delay)
+					if w != len(words) - 1:
+						if line_pos in (self.width, self.width-1):
+							if line_pos == self.width-1:
+								self.scrollpad.addstr('\n', attr)
+							line_pos = 0
+						else:
+							self.scrollpad.addstr(' ', attr)
+							line_pos += 1
+				if l != len(lines) - 1:
+					self.scrollpad.addstr('\n', attr)
+					line_pos = 0
 
 	def put(self, s, attr=None):
 		self.queue.put((s, attr))

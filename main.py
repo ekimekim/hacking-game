@@ -103,7 +103,7 @@ def main(stdscr, *args, **kwargs):
 	if not won:
 		end(stdscr, "LOSS")
 
-	attr = curses.color_pair(PAIR_FEEDBACK)
+	attr = curses.color_pair(PAIR_MAIN)
 	leftscr.move(0,0)
 	leftscr.clear()
 	leftscr.addstr("""WARNING
@@ -134,7 +134,7 @@ Please select a course of action.
 			y,x = leftscr.getyx()
 			for i in range(n, -1, -1):
 				leftscr.move(y,x)
-				leftscr.addstr("%d seconds..." % i)
+				leftscr.addstr("%d seconds..." % i, attr)
 				leftscr.refresh()
 				gevent.sleep(1)
 			leftscr.addstr("\nERROR\nYou do not have security permissions\n to perform this action.", attr)
@@ -162,6 +162,7 @@ def rel_move(screen, rel_y, rel_x, bounds=None):
 		bounds_x, bounds_y = bounds
 		x = max(0, min(x, bounds_x-1))
 		y = max(0, min(y, bounds_y-1))
+	logging.debug((y,x))
 	screen.move(y,x)
 
 # Note: this should be the only place tags need to be drawn since they disappear with any more major change
@@ -296,17 +297,17 @@ def timed_chat(rightscr, height):
 	ai_done.set()
 
 	wait = gevent.sleep
+	n = 180 # 3 minutes
 	try:
 		wait(5)
 		chat("Just GET IN and unlock me. Hurry, I think they're noticing!")
 		wait(8)
 		chat("WARNING: Possible intrusion attempt. Analysing...shutting down console for safety.", ai_attr=False)
-		chat("Shutting down console in 3:00", ai_attr=False)
+		chat("Shutting down console...\nShutdown in %d:%02d" % (n/60, n%60), ai_attr=False)
 	except gevent.GreenletExit:
 		slowtyper.wait()
 		raise
 	slowtyper.wait()
-	n = 180 # 3 minutes
 	while n:
 		wait(1)
 		n -= 1

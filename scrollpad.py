@@ -21,5 +21,4 @@ class ScrollPad(object):
 		screen_y, screen_x = self.screen_pos
 		y, x = self.pad.getyx()
 		pos = max(0, y - self.height)
-		logging.debug((pos, 0, screen_y, screen_x, screen_y + self.height, screen_x + self.width))
 		self.pad.refresh(pos, 0, screen_y, screen_x, screen_y + self.height, screen_x + self.width)
