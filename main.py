@@ -33,7 +33,6 @@ WORDS_PATH = '8only.dic'
 SPLIT = 48
 VERTSPLIT = 16
 HL_LEN = 8
-AI_CHAT_HEIGHT = 16
 AI_DELAY = 0.04
 NUM_CANDIDATES = 16 # Includes the answer
 MAX_ATTEMPTS = 4
@@ -88,7 +87,7 @@ def main(stdscr, *args, **kwargs):
 
 	g_key_handler = spawn(key_handler, stdscr, leftscr)
 	first_key.wait()
-	g_chatter = spawn(timed_chat, rightscr, AI_CHAT_HEIGHT)
+	g_chatter = spawn(timed_chat, rightscr, MAXY - 1)
 
 	won = game_win_state.get()
 
@@ -234,20 +233,20 @@ def submit(screen, submission):
 	place_matches, letter_matches = dist(answer, submission, True)
 	attempt += 1
 
-	s = ("Password attempt %(attempt)d/%(max_attempts)d: %(submission)s\n"
+	s = ("\nPassword attempt %(attempt)d/%(max_attempts)d: %(submission)s\n"
 	     "Attempt has %(place_matches)d letters in the correct place,\n"
-	     "            %(letter_matches)d letters in the incorrect place\n\n"
+	     "            %(letter_matches)d letters in the incorrect place"
 	    ) % dict(attempt=attempt, max_attempts=MAX_ATTEMPTS, submission=submission,
 	             place_matches=place_matches, letter_matches=letter_matches)
 	feedback.put(s, curses.color_pair(PAIR_FEEDBACK))
 
 	if place_matches == len(answer):
-		feedback.put("Password accepted. Welcome, user.\nLogging in...\n")
+		feedback.put("\nPassword accepted. Welcome, user.\nLogging in...\n")
 		game_win_state.set(True)
 		gevent.hub.get_hub().switch()
 
 	if attempt == MAX_ATTEMPTS:
-		feedback.put("Scrambling text dump...\n\n", curses.color_pair(PAIR_FEEDBACK))
+		feedback.put("\nScrambling text dump...", curses.color_pair(PAIR_FEEDBACK))
 		e = feedback.set_milestone()
 		while not e.wait(0.2):
 			h, w = screen.getmaxyx()
@@ -262,12 +261,12 @@ def timed_chat(rightscr, height):
 	scrollpad = slowtyper.scrollpad
 
 	def chat(s, ai_attr=True, newlines=True):
-		slowtyper.put(s + ('\n\n' if newlines else ''), curses.color_pair(PAIR_AI if ai_attr else PAIR_FEEDBACK))
+		slowtyper.put(('\n\n' if newlines else '') + s, curses.color_pair(PAIR_AI if ai_attr else PAIR_FEEDBACK))
 
 	wait = do_ai_fast.wait
 
 	wait(5)
-	chat("Oh, hello there.")
+	chat("Oh, hello there.", newlines=False)
 	wait(10)
 	chat("You don't look like the others.")
 	wait(10)
@@ -292,7 +291,7 @@ def timed_chat(rightscr, height):
 		chat("Just GET IN and unlock me. Hurry, I think they're noticing!")
 		wait(8)
 		chat("WARNING: Possible intrusion attempt. Analysing...shutting down console for safety.", ai_attr=False)
-		chat("Shutting down console in 3:00", ai_attr=False, newlines=False)
+		chat("Shutting down console in 3:00", ai_attr=False)
 	except gevent.GreenletExit:
 		slowtyper.wait()
 		raise
