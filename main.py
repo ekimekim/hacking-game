@@ -28,6 +28,8 @@ game_close = gevent.event.Event()
 tags = {}
 
 #do_ai_fast.set() # for testing
+cheat = False
+cheat = True
 
 WORDS_PATH = '8only.dic'
 SPLIT = 48
@@ -87,7 +89,7 @@ def main(stdscr, *args, **kwargs):
 
 	g_key_handler = spawn(key_handler, stdscr, leftscr)
 	first_key.wait()
-	g_chatter = spawn(timed_chat, rightscr, MAXY - 1)
+	g_chatter = spawn(timed_chat, rightscr, MAXY - 2)
 
 	won = game_win_state.get()
 
@@ -104,13 +106,15 @@ def main(stdscr, *args, **kwargs):
 	attr = curses.color_pair(PAIR_FEEDBACK)
 	leftscr.move(0,0)
 	leftscr.clear()
-	leftscr.addstr("""
-WARNING
-Experiment 203 (Synthetic Reasoning and Applications to Information Security) has breached containment.
+	leftscr.addstr("""WARNING
+Experiment 203 (Synthetic Reasoning, Combat)
+ has breached containment.
 Please select a course of action.
- (1) Isolate system and scrub disks (note: This will destroy all research on Experiment 203)
- (2) [SECURITY OVERRIDE] Release remaining locks and allow experiment full access to system
- (3) Activate Emergency Containment Procedure XK-682
+ (1) Isolate system and scrub disks (This will
+      destroy all research on Experiment 203)
+ (2) Release remaining locks, allow experiment
+      full access to base (MAY BE DANGEROUS)
+ (3) Activate Emergency Base Procedure XK-682
 
 """, attr)
 	leftscr.refresh()
@@ -125,10 +129,15 @@ Please select a course of action.
 		elif c == ord('3') and first:
 			first = False
 			logging.info("User attempted to arm the nukes")
-			leftscr.addstr("Arming nuclear warheads. Activation in 10 seconds.\n\n", attr)
-			leftscr.refresh()
-			gevent.sleep(1)
-			leftscr.addstr("ERROR\nYou do not have security permissions to perform this action.\n", attr)
+			n = 3
+			leftscr.addstr("Arming nuclear warheads.\nActivation in ", attr)
+			y,x = leftscr.getyx()
+			for i in range(n, -1, -1):
+				leftscr.move(y,x)
+				leftscr.addstr("%d seconds..." % i)
+				leftscr.refresh()
+				gevent.sleep(1)
+			leftscr.addstr("\nERROR\nYou do not have security permissions\n to perform this action.", attr)
 			leftscr.refresh()
 
 def end(stdscr, result):
@@ -176,6 +185,7 @@ def random_fill(screen, (height, width)):
 
 def place_words(screen, (height, width), words):
 	lettermap = {}
+	pair = PAIR_TAGGED if cheat else PAIR_MAIN
 	for word in words:
 		while 1:
 			y = random.randrange(height)
@@ -184,7 +194,7 @@ def place_words(screen, (height, width), words):
 				continue # Overlap, retry
 			for n in range(HL_LEN):
 				lettermap[(y, x+n)] = True
-			screen.addstr(y, x, word, curses.color_pair(PAIR_MAIN))
+			screen.addstr(y, x, word, curses.color_pair(PAIR_AI if cheat and word == answer else pair))
 			break
 	screen.move(0,0)
 
