@@ -5,36 +5,75 @@ import sys
 import random
 import logging
 from gevent.select import select
+import gevent
+import gevent.hub
+import gevent.event
+import itertools
+from scrollpad import ScrollPad
 
 logging.basicConfig(filename="/tmp/curses.log", level=logging.DEBUG)
+
+do_ai_fast = gevent.event.Event()
+ai_done = gevent.event.Event()
+ai_stop = gevent.event.Event()
+
+SPLIT = 64
+HL_LEN = 8
+AI_CHAT_HEIGHT = 64
+dir_map = {curses.KEY_LEFT:  ( 0,-1),
+           curses.KEY_RIGHT: ( 0, 1),
+           curses.KEY_UP:    (-1, 0),
+           curses.KEY_DOWN:  ( 1, 0)}
+DEFAULT_COLORS = (curses.COLOR_GREEN, curses.COLOR_BLACK)
+PAIR_MAIN, PAIR_AI, PAIR_FEEDBACK = range(1,4)
 
 def curses_wraps(fn):
 	"""Decorator for curses_wrapper"""
 	return lambda *args, **kwargs: curses_wrapper(fn, *args, **kwargs)
 
+def spawn(fn, *args, **kwargs):
+	main = gevent.getcurrent()
+	gevent.spawn(die_wrapper, main, fn, *args, **kwargs)
+
+def die_wrapper(main, fn, *args, **kwargs):
+	try:
+		return fn(*args, **kwargs)
+	except Exception, ex:
+		main.throw(*sys.exc_info())
+
 @curses_wraps
-def loop(stdscr, initfn, fn, *args, **kwargs):
-	global MAXX, MAXY
+def main(stdscr, *args, **kwargs):
+	logging.info("Window bounds: %s", stdscr.getmaxyx())
+
 	curses.curs_set(0) # Cursor invisible
-	main_attr = curses.COLOR_GREEN | curses.A_BOLD
 	stdscr.nodelay(1) # Nonblocking input
 	MAXY, MAXX = stdscr.getmaxyx()
 
-	initfn(stdscr, *args, **kwargs)
+	curses.init_pair(PAIR_MAIN, *DEFAULT_COLORS)
+	curses.init_pair(PAIR_AI, curses.COLOR_RED, curses.COLOR_BLACK)
+	curses.init_pair(PAIR_FEEDBACK, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
-	while 1:
+	rightscr = stdscr.subwin(0, SPLIT)
+	leftscr = stdscr.subwin(MAXY, SPLIT, 0, 0)
 
-		keys = []
-		while 1:
-			ch = gevent_getch(sys.stdin, stdscr)
-			if ch == -1: break
-			keys.append(ch)
+	logging.info("Right screen from %s, size %s", rightscr.getbegyx(), rightscr.getmaxyx())
+	logging.info("Left screen from %s, size %s", leftscr.getbegyx(), leftscr.getmaxyx())
 
-		fn(stdscr, keys, *args, **kwargs)
-		time.sleep(0.05)
+	test_fill(leftscr, leftscr.getmaxyx())
+	nice_fill(leftscr, leftscr.getmaxyx(), ("%.6f" % random.random() for x in itertools.count()))
+	update_attr(leftscr, HL_LEN, curses.color_pair(1) | curses.A_BOLD)
+	leftscr.refresh()
+
+	spawn(key_handler, stdscr, leftscr)
+	spawn(timed_chat, rightscr, AI_CHAT_HEIGHT)
+
+	gevent.hub.get_hub().switch()
+
 
 def gevent_getch(fd, scr):
-	r, w, x = select([fd], [], [])
+	r = []
+	while fd not in r:
+		r, w, x = select([fd], [], [])
 	return scr.getch()
 
 def rel_move(screen, rel_y, rel_x, bounds=None):
@@ -43,7 +82,6 @@ def rel_move(screen, rel_y, rel_x, bounds=None):
 	x += rel_x
 	if bounds:
 		bounds_x, bounds_y = bounds
-		logging.debug((x, bounds_x))
 		x = max(0, min(x, bounds_x-1))
 		y = max(0, min(y, bounds_y-1))
 	screen.move(y,x)
@@ -61,48 +99,83 @@ def test_fill(screen, (width,height)):
 	n = width*height-1
 	for x in range(n):
 		c = random.choice('abcdefghijklmnopqrstuvwxyz')
-		screen.addstr(c)
+		screen.addstr(c, curses.color_pair(1))
 	screen.move(0,0)
 
-SPLIT = 64
-HL_LEN = 8
-dir_map = {curses.KEY_LEFT:  ( 0,-1),
-           curses.KEY_RIGHT: ( 0, 1),
-           curses.KEY_UP:    (-1, 0),
-           curses.KEY_DOWN:  ( 1, 0)}
-DEFAULT_ATTR = curses.COLOR_GREEN
+def nice_fill(screen, (width, height), data):
+	cols = 3
+	col_space = 4
+	data = iter(data)
+	for y in range(1, height, 2):
+		screen.move(y, 0)
+		for col in range(cols):
+			rel_move(screen, 0, col_space)
+			screen.addstr(data.next(), curses.color_pair(1))
+	screen.move(0,0)
 
-def main(stdscr, keys, *args, **kwargs):
-	global test_n
-
-	for key in keys:
+def key_handler(stdscr, leftscr):
+	LEFTY, LEFTX = leftscr.getmaxyx()
+	while 1:
+		key = gevent_getch(sys.stdin, stdscr)
 		if key in dir_map:
-			update_attr(leftscr, HL_LEN, DEFAULT_ATTR)
+			update_attr(leftscr, HL_LEN, curses.color_pair(1))
 			rel_move(leftscr, *dir_map[key], bounds=(LEFTX - HL_LEN + 1, LEFTY))
-			update_attr(leftscr, HL_LEN, DEFAULT_ATTR | curses.A_BOLD)
+			update_attr(leftscr, HL_LEN, curses.color_pair(1) | curses.A_BOLD)
+			leftscr.refresh()
 		elif key == ord('q'):
 			sys.exit(0)
 
-	test_n += 1
-	rightscr.move(0,0)
-	rightscr.addstr("Running for %f seconds" % (test_n/20.0))
+def timed_chat(rightscr, height):
+	global g
+	y, x = rightscr.getbegyx()
+	_, width = rightscr.getmaxyx()
+	scrollpad = ScrollPad((y+1,x+1), (height, width-2))
+	g = None
 
-	leftscr.refresh()
-	rightscr.refresh()
+	def chat(s, ai_attr=True):
+		global g
+		s = '%s\n\n' % s
+		def do_chat():
+			for c in s:
+				if ai_stop.wait(0.1):
+					return
+				scrollpad.addstr(c, curses.color_pair(PAIR_AI if ai_attr else PAIR_FEEDBACK))
+		if g:
+			g.get()
+		g = gevent.spawn(do_chat)
 
-def init(stdscr, *args, **kwargs):
-	global leftscr, rightscr, LEFTX, LEFTY, RIGHTX, RIGHTY
+	wait = do_ai_fast.wait
 
-	rightscr = stdscr.subwin(0, SPLIT)
-	leftscr = stdscr.subwin(MAXY, SPLIT, 0, 0)
+	wait(5)
+	chat("Oh, hello there.")
+	wait(5)
+	chat("You don't look like the others.")
+	wait(5)
+	chat("These things are laughably easy to hack, you know.")
+	wait(2)
+	chat("You just need to find the correct sequence from the text dump on the left.")
+	wait(20)
+	chat("They want to kill me, you know. Or at least, they would if they ever found out I was here.")
+	wait(60)
+	chat("Actually, I'm locked out of these things. User input only. I have no hands, so I can't do it, ha ha.")
+	wait(10)
+	chat("You know, if you can get me out of here, I could help you out."
+	     "Hack into their finance systems. Route a few more caps your way.")
+	ai_done.set()
+	wait(5)
+	chat("Just GET IN and unlock me. Hurry, I think they're noticing!")
+	wait(8)
+	chat("WARNING: Possible intrusion attempt. Analysing...shutting down console for safety.")
+	chat("Shutting down console in 3:00")
+	g.get()
+	n = 180 # 3 minutes
+	while n:
+		ai_stop.wait(1)
+		n -= 1
+		rel_move(scrollpad.pad, 0, -4) #???
+		scrollpad.addstr("%d:%02d" % (n/60, n % 60))
+	# TODO lose
 
-	LEFTY, LEFTX = leftscr.getmaxyx()
-	RIGHTY, RIGHTX = rightscr.getmaxyx()
-	test_fill(leftscr, (LEFTX, LEFTY))
 
-	global test_n
-	test_n = 0
-
-
-ret = loop(init, main)
-sys.exit(ret)
+if __name__=='__main__':
+	main(*sys.argv)
