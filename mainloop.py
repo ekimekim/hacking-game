@@ -4,13 +4,13 @@ import time
 import sys
 import random
 import logging
+from gevent.select import select
 
 logging.basicConfig(filename="/tmp/curses.log", level=logging.DEBUG)
 
 def curses_wraps(fn):
 	"""Decorator for curses_wrapper"""
 	return lambda *args, **kwargs: curses_wrapper(fn, *args, **kwargs)
-
 
 @curses_wraps
 def loop(stdscr, initfn, fn, *args, **kwargs):
@@ -26,13 +26,16 @@ def loop(stdscr, initfn, fn, *args, **kwargs):
 
 		keys = []
 		while 1:
-			ch = stdscr.getch()
+			ch = gevent_getch(sys.stdin, stdscr)
 			if ch == -1: break
 			keys.append(ch)
 
 		fn(stdscr, keys, *args, **kwargs)
 		time.sleep(0.05)
 
+def gevent_getch(fd, scr):
+	r, w, x = select([fd], [], [])
+	return scr.getch()
 
 def rel_move(screen, rel_y, rel_x, bounds=None):
 	y, x = screen.getyx()
@@ -68,14 +71,22 @@ dir_map = {curses.KEY_LEFT:  ( 0,-1),
            curses.KEY_UP:    (-1, 0),
            curses.KEY_DOWN:  ( 1, 0)}
 DEFAULT_ATTR = curses.COLOR_GREEN
+
 def main(stdscr, keys, *args, **kwargs):
+	global test_n
+
 	for key in keys:
 		if key in dir_map:
 			update_attr(leftscr, HL_LEN, DEFAULT_ATTR)
-			rel_move(leftscr, *dir_map[key], bounds=(LEFTX, LEFTY))
+			rel_move(leftscr, *dir_map[key], bounds=(LEFTX - HL_LEN + 1, LEFTY))
 			update_attr(leftscr, HL_LEN, DEFAULT_ATTR | curses.A_BOLD)
 		elif key == ord('q'):
 			sys.exit(0)
+
+	test_n += 1
+	rightscr.move(0,0)
+	rightscr.addstr("Running for %f seconds" % (test_n/20.0))
+
 	leftscr.refresh()
 	rightscr.refresh()
 
@@ -88,6 +99,9 @@ def init(stdscr, *args, **kwargs):
 	LEFTY, LEFTX = leftscr.getmaxyx()
 	RIGHTY, RIGHTX = rightscr.getmaxyx()
 	test_fill(leftscr, (LEFTX, LEFTY))
+
+	global test_n
+	test_n = 0
 
 
 ret = loop(init, main)
