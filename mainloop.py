@@ -5,6 +5,7 @@ import sys
 import random
 import logging
 from gevent.select import select
+import gevent.queue
 import gevent
 import gevent.hub
 import gevent.event
@@ -19,7 +20,7 @@ ai_stop = gevent.event.Event()
 
 SPLIT = 64
 HL_LEN = 8
-AI_CHAT_HEIGHT = 64
+AI_CHAT_HEIGHT = 16
 dir_map = {curses.KEY_LEFT:  ( 0,-1),
            curses.KEY_RIGHT: ( 0, 1),
            curses.KEY_UP:    (-1, 0),
@@ -33,12 +34,12 @@ def curses_wraps(fn):
 
 def spawn(fn, *args, **kwargs):
 	main = gevent.getcurrent()
-	gevent.spawn(die_wrapper, main, fn, *args, **kwargs)
+	return gevent.spawn(die_wrapper, main, fn, *args, **kwargs)
 
 def die_wrapper(main, fn, *args, **kwargs):
 	try:
 		return fn(*args, **kwargs)
-	except Exception, ex:
+	except BaseException, ex:
 		main.throw(*sys.exc_info())
 
 @curses_wraps
@@ -102,11 +103,12 @@ def test_fill(screen, (width,height)):
 		screen.addstr(c, curses.color_pair(1))
 	screen.move(0,0)
 
-def nice_fill(screen, (width, height), data):
+def nice_fill(screen, (height, width), data):
 	cols = 3
 	col_space = 4
 	data = iter(data)
 	for y in range(1, height, 2):
+		logging.debug("y=%s", y)
 		screen.move(y, 0)
 		for col in range(cols):
 			rel_move(screen, 0, col_space)
@@ -132,42 +134,44 @@ def timed_chat(rightscr, height):
 	scrollpad = ScrollPad((y+1,x+1), (height, width-2))
 	g = None
 
-	def chat(s, ai_attr=True):
-		global g
-		s = '%s\n\n' % s
-		def do_chat():
+	chat_queue = gevent.queue.Queue()
+	def chatter():
+		for s, ai_attr in chat_queue:
+			if s is None: return
 			for c in s:
 				if ai_stop.wait(0.1):
 					return
 				scrollpad.addstr(c, curses.color_pair(PAIR_AI if ai_attr else PAIR_FEEDBACK))
-		if g:
-			g.get()
-		g = gevent.spawn(do_chat)
+	g_chatter = spawn(chatter)
+
+	def chat(s, ai_attr=True, newlines=True):
+		chat_queue.put((s + ('\n\n' if newlines else ''), ai_attr))
 
 	wait = do_ai_fast.wait
 
-	wait(5)
+#	wait(5)
 	chat("Oh, hello there.")
-	wait(5)
+#	wait(5)
 	chat("You don't look like the others.")
-	wait(5)
+#	wait(5)
 	chat("These things are laughably easy to hack, you know.")
-	wait(2)
+#	wait(2)
 	chat("You just need to find the correct sequence from the text dump on the left.")
-	wait(20)
+#	wait(20)
 	chat("They want to kill me, you know. Or at least, they would if they ever found out I was here.")
-	wait(60)
+#	wait(60)
 	chat("Actually, I'm locked out of these things. User input only. I have no hands, so I can't do it, ha ha.")
-	wait(10)
-	chat("You know, if you can get me out of here, I could help you out."
+#	wait(10)
+	chat("You know, if you can get me out of here, I could help you out. "
 	     "Hack into their finance systems. Route a few more caps your way.")
 	ai_done.set()
 	wait(5)
 	chat("Just GET IN and unlock me. Hurry, I think they're noticing!")
 	wait(8)
-	chat("WARNING: Possible intrusion attempt. Analysing...shutting down console for safety.")
-	chat("Shutting down console in 3:00")
-	g.get()
+	chat("WARNING: Possible intrusion attempt. Analysing...shutting down console for safety.", ai_attr=False)
+	chat("Shutting down console in 3:00", ai_attr=False, newlines=False)
+	chat_queue.put((None, None))
+	g_chatter.get()
 	n = 180 # 3 minutes
 	while n:
 		ai_stop.wait(1)
