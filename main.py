@@ -9,6 +9,7 @@ import gevent.queue
 import gevent
 import gevent.hub
 import gevent.event
+from gevent.backdoor import BackdoorServer
 import itertools
 from scrollpad import ScrollPad
 from common import spawn
@@ -18,6 +19,8 @@ logging.basicConfig(filename="/tmp/curses.log", level=logging.DEBUG)
 
 do_ai_fast = gevent.event.Event()
 ai_done = gevent.event.Event()
+
+do_ai_fast.set()
 
 SPLIT = 64
 HL_LEN = 8
@@ -35,7 +38,13 @@ def curses_wraps(fn):
 
 @curses_wraps
 def main(stdscr, *args, **kwargs):
+	global answer, feedback
+
 	logging.info("Window bounds: %s", stdscr.getmaxyx())
+
+	backdoor = BackdoorServer(('0.0.0.0', 4200))
+	backdoor.start()
+	logging.info("Backdoor started")
 
 	curses.curs_set(0) # Cursor invisible
 	stdscr.nodelay(1) # Nonblocking input
@@ -50,6 +59,12 @@ def main(stdscr, *args, **kwargs):
 
 	logging.info("Right screen from %s, size %s", rightscr.getbegyx(), rightscr.getmaxyx())
 	logging.info("Left screen from %s, size %s", leftscr.getbegyx(), leftscr.getmaxyx())
+
+	y, x = rightscr.getbegyx()
+	h, w = rightscr.getmaxyx()
+	y += AI_CHAT_HEIGHT + 2
+	h -= AI_CHAT_HEIGHT + 2
+	feedback = SlowtypeWindow((y+1,x+1), (h-3, w-2))
 
 	test_fill(leftscr, leftscr.getmaxyx())
 	nice_fill(leftscr, leftscr.getmaxyx(), ("%.6f" % random.random() for x in itertools.count()))
@@ -115,8 +130,16 @@ def key_handler(stdscr, leftscr):
 			rel_move(leftscr, *dir_map[key], bounds=(LEFTX - HL_LEN + 1, LEFTY))
 			update_attr(leftscr, HL_LEN, curses.color_pair(1) | curses.A_BOLD)
 			leftscr.refresh()
+		elif key == ord('\n'):
+			y, x = leftscr.getyx()
+			submit(leftscr.instr(y, x, HL_LEN))
 		elif key == ord('q'):
 			sys.exit(0)
+
+def submit(submission):
+	global answer, feedback
+	feedback.put(submission + '\n', curses.color_pair(PAIR_FEEDBACK))
+
 
 def timed_chat(rightscr, height):
 	y, x = rightscr.getbegyx()
@@ -145,7 +168,8 @@ def timed_chat(rightscr, height):
 	chat("You know, if you can get me out of here, I could help you out. "
 	     "Hack into their finance systems. Route a few more caps your way.")
 	ai_done.set()
-	gevent.sleep()
+
+	wait = gevent.sleep
 	wait(5)
 	chat("Just GET IN and unlock me. Hurry, I think they're noticing!")
 	wait(8)
@@ -154,7 +178,7 @@ def timed_chat(rightscr, height):
 	slowtyper.wait()
 	n = 180 # 3 minutes
 	while n:
-		ai_stop.wait(1)
+		wait(1)
 		n -= 1
 		rel_move(scrollpad.pad, 0, -4)
 		scrollpad.addstr("%d:%02d" % (n/60, n % 60))
