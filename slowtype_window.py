@@ -5,7 +5,7 @@ from gevent import sleep
 from common import spawn
 
 class SlowtypeWindow(object):
-	def __init__(self, pos, size, delay=0.1):
+	def __init__(self, pos, size, delay=0.01):
 		self.scrollpad = ScrollPad(pos, size)
 		self.queue = Queue()
 		self.g_writer = spawn(self.writer)
@@ -24,7 +24,11 @@ class SlowtypeWindow(object):
 	def put(self, s, attr=None):
 		self.queue.put((s, attr))
 
-	def wait(self):
+	def set_milestone(self):
+		"""Returns an event, that will be set when the output reaches the current point in the queue."""
 		e = Event()
-		self.queue.put(e) # Add a milestone so we can be informed of when it reaches that point of queue
-		e.wait()
+		self.queue.put(e)
+		return e
+
+	def wait(self):
+		self.set_milestone().wait()
