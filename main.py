@@ -15,6 +15,7 @@ from scrollpad import ScrollPad
 from common import spawn
 from slowtype_window import SlowtypeWindow
 from words import *
+import signal
 
 
 logging.basicConfig(filename="/tmp/curses.log", level=logging.DEBUG)
@@ -23,9 +24,10 @@ first_key = gevent.event.Event()
 do_ai_fast = gevent.event.Event()
 ai_done = gevent.event.Event()
 game_win_state = gevent.event.AsyncResult()
+game_close = gevent.event.Event()
 tags = {}
 
-do_ai_fast.set() # for testing
+#do_ai_fast.set() # for testing
 
 WORDS_PATH = '8only.dic'
 SPLIT = 64
@@ -48,6 +50,11 @@ def curses_wraps(fn):
 @curses_wraps
 def main(stdscr, *args, **kwargs):
 	global answer, feedback, candidates
+
+	gevent.signal(signal.SIGUSR1, lambda *args: game_close.set()) # For standard/graceful restart
+	signal.signal(signal.SIGINT, signal.SIG_IGN) # Disable SIGINT
+	signal.signal(signal.SIGQUIT, signal.SIG_IGN) # Disable SIGQUIT
+	signal.signal(signal.SIGTSTP, signal.SIG_IGN) # Disable SIGTSTP
 
 	logging.info("Window bounds: %s", stdscr.getmaxyx())
 
@@ -95,10 +102,44 @@ def main(stdscr, *args, **kwargs):
 	feedback.wait()
 
 	if not won:
-		stdscr.clear()
-		stdscr.refresh()
-		logging.critical("Game ended with LOSS")
-		gevent.hub.get_hub().switch()
+		end(stdscr, "LOSS")
+
+	attr = curses.color_pair(PAIR_FEEDBACK)
+	leftscr.move(0,0)
+	leftscr.clear()
+	leftscr.addstr("""
+WARNING
+Experiment 203 (Synthetic Reasoning and Applications to Information Security) has breached containment.
+Please select a course of action.
+ (1) Isolate system and scrub disks (note: This will destroy all research on Experiment 203)
+ (2) [SECURITY OVERRIDE] Release remaining locks and allow experiment full access to system
+ (3) Activate Emergency Containment Procedure XK-682
+
+""", attr)
+	leftscr.refresh()
+
+	first = True
+	while 1:
+		c = gevent_getch(sys.stdin, stdscr)
+		if c == ord('1'):
+			end(stdscr, "DESTROY")
+		elif c == ord('2'):
+			end(stdscr, "RELEASE")
+		elif c == ord('3') and first:
+			first = False
+			logging.info("User attempted to arm the nukes")
+			leftscr.addstr("Arming nuclear warheads. Activation in 10 seconds.\n\n", attr)
+			leftscr.refresh()
+			gevent.sleep(1)
+			leftscr.addstr("ERROR\nYou do not have security permissions to perform this action.\n", attr)
+			leftscr.refresh()
+
+def end(stdscr, result):
+	logging.critical("Game ended with %s", result)
+	stdscr.clear()
+	stdscr.refresh()
+	game_close.wait()
+	sys.exit(0)
 
 
 def gevent_getch(fd, scr):
@@ -254,7 +295,7 @@ def timed_chat(rightscr, height):
 		wait(8)
 		chat("WARNING: Possible intrusion attempt. Analysing...shutting down console for safety.", ai_attr=False)
 		chat("Shutting down console in 3:00", ai_attr=False, newlines=False)
-	except GreenletExit:
+	except gevent.GreenletExit:
 		slowtyper.wait()
 		raise
 	slowtyper.wait()
