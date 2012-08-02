@@ -42,6 +42,7 @@ dir_map = {curses.KEY_LEFT:  ( 0,-1),
            curses.KEY_DOWN:  ( 1, 0)}
 DEFAULT_COLORS = (curses.COLOR_GREEN, curses.COLOR_BLACK)
 PAIR_MAIN, PAIR_AI, PAIR_FEEDBACK, PAIR_TAGGED = range(1,5)
+CURSOR_ATTR = curses.A_STANDOUT
 
 def curses_wraps(fn):
 	"""Decorator for curses_wrapper"""
@@ -200,7 +201,7 @@ def shuffle_main(screen, words):
 	random.shuffle(words)
 	place_words(screen, (h-1, w), words)
 
-	update_attr(screen, HL_LEN, curses.color_pair(PAIR_MAIN) | curses.A_BOLD)
+	update_attr(screen, HL_LEN, CURSOR_ATTR)
 	screen.refresh()
 
 def key_handler(stdscr, leftscr):
@@ -212,7 +213,7 @@ def key_handler(stdscr, leftscr):
 		if key in dir_map:
 			update_attr(leftscr, HL_LEN)
 			rel_move(leftscr, *dir_map[key], bounds=(LEFTX - HL_LEN + 1, LEFTY-1))
-			update_attr(leftscr, HL_LEN, curses.A_BOLD)
+			update_attr(leftscr, HL_LEN, CURSOR_ATTR)
 			leftscr.refresh()
 		elif key == ord('\n'):
 			y, x = leftscr.getyx()
@@ -226,7 +227,7 @@ def key_handler(stdscr, leftscr):
 			else:
 				for i in range(HL_LEN):
 					tags[(y, x+i)] = PAIR_TAGGED
-			update_attr(leftscr, HL_LEN, curses.A_BOLD)
+			update_attr(leftscr, HL_LEN, CURSOR_ATTR)
 			leftscr.refresh()
 		elif key == ord('q'):
 			sys.exit(0)
