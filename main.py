@@ -299,7 +299,7 @@ def timed_chat(rightscr, height):
 		slowtyper.wait()
 		raise
 	slowtyper.wait()
-	n = 18 # 3 minutes
+	n = 180 # 3 minutes
 	while n:
 		wait(1)
 		n -= 1
