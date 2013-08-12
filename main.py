@@ -56,9 +56,9 @@ def main(stdscr, *args, **kwargs):
 	global answer, feedback, candidates
 
 	gevent.signal(signal.SIGUSR1, lambda *args: game_close.set()) # For standard/graceful restart
-	gevent.signal(signal.SIGINT, lambda *args: None) # Disable SIGINT
-	signal.signal(signal.SIGQUIT, signal.SIG_IGN) # Disable SIGQUIT
-	signal.signal(signal.SIGTSTP, signal.SIG_IGN) # Disable SIGTSTP
+#	gevent.signal(signal.SIGINT, lambda *args: None) # Disable SIGINT
+#	signal.signal(signal.SIGQUIT, signal.SIG_IGN) # Disable SIGQUIT
+#	signal.signal(signal.SIGTSTP, signal.SIG_IGN) # Disable SIGTSTP
 
 	logging.info("Window bounds: %s", stdscr.getmaxyx())
 
